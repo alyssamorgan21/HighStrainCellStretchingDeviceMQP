@@ -1,0 +1,157 @@
+const byte numChars = 32;
+char receivedChars[numChars];
+
+
+boolean newData = false;
+
+
+#include <AccelStepper.h>
+#define MotorInterfaceType 1
+const int stepPin = 3;
+const int dirPin = 2;
+
+
+
+
+AccelStepper stepper = AccelStepper(MotorInterfaceType, stepPin, dirPin);
+
+
+const int maxSpeed = 3000;
+int currentSpeed = 0;
+int upSpeed = 0;
+int holdUp = 0;
+int downSpeed = 0;
+int holdDown = 0;
+int strain = 0;
+int cycles = 0;
+int step = 0;
+
+
+void setup() {
+  stepper.setMaxSpeed(maxSpeed);
+  stepper.setCurrentPosition(0);
+  stepper.setSpeed(0);
+  stepper.stop();
+
+
+  Serial.begin(9600);
+}
+
+
+void loop() {
+  //Serial.write(currentSpeed);
+  if (step > 0) {
+    // step forward
+    stepper.setSpeed(99);
+    stepper.runSpeed();    
+    // set position 0
+    if (stepper.currentPosition() >= step) {
+      step = 0;
+      stepper.setCurrentPosition(0);
+    }
+  } else if (step < 0) {
+    // step forward
+    stepper.setSpeed(-99);
+    stepper.runSpeed();    
+    // set position 0
+    if (stepper.currentPosition() <= step) {
+      step = 0;
+      stepper.setCurrentPosition(0);
+    }
+  } else if (step == 0) {
+    if (strain == 0) {
+      stepper.stop();
+      delay(100);
+    } else if (stepper.currentPosition() >= strain) {
+      currentSpeed = downSpeed;
+      delay(holdUp);
+    } else if (stepper.currentPosition() <= 0) {
+      if (currentSpeed != upSpeed) {
+        currentSpeed = upSpeed;
+        delay(holdDown);
+        cycles--;
+      }
+    }
+    if (cycles > 0) {
+      stepper.setSpeed(currentSpeed);
+      stepper.runSpeed();
+    } else {
+      //stepper.stop();
+      delay(100);
+    }
+  }
+ 
+
+
+  recvWithStartEndMarkers();
+  if (newData == true) {
+    parseData();
+    newData=false;
+  }
+}
+
+
+void recvWithStartEndMarkers() {
+    // function made by following tutorial by Robin2 on Arduino Forum: https://forum.arduino.cc/t/serial-input-basics-updated/382007
+    static boolean recvInProgress = false;
+    static byte ndx = 0;
+    char startMarker = '<';
+    char endMarker = '>';
+    char rc;
+ 
+    while (Serial.available() > 0 && newData == false) {
+        rc = Serial.read();
+
+
+        if (recvInProgress == true) {
+            if (rc != endMarker) {
+                receivedChars[ndx] = rc;
+                ndx++;
+                if (ndx >= numChars) {
+                    ndx = numChars - 1;
+                }
+            }
+            else {
+                receivedChars[ndx] = '\0';
+                recvInProgress = false;
+                ndx = 0;
+                newData = true;
+            }
+        }
+
+
+        else if (rc == startMarker) {
+            recvInProgress = true;
+        }
+    }
+}
+
+
+void parseData() {
+   
+  char * strtokIndx;
+ 
+  strtokIndx = strtok(receivedChars,",");
+  strain = atoi(strtokIndx);
+ 
+  strtokIndx = strtok(NULL, ",");
+  upSpeed = atoi(strtokIndx);
+ 
+  strtokIndx = strtok(NULL, ",");
+  holdUp = atoi(strtokIndx);
+
+
+  strtokIndx = strtok(NULL, ",");
+  downSpeed = -1*atoi(strtokIndx);
+ 
+  strtokIndx = strtok(NULL, ",");
+  holdDown = atoi(strtokIndx);
+
+
+  strtokIndx = strtok(NULL, ",");
+  cycles = atoi(strtokIndx);
+
+
+  strtokIndx = strtok(NULL, ",");
+  step = atoi(strtokIndx);
+}
